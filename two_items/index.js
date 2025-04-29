@@ -1,7 +1,13 @@
 const { consultarPorNif } = require("../db_registros");
+const { leerExcelFiltrado } = require("./excel_array");
 const { getFechasPdf } = require("./get_pdf_info");
 const { corregirOrden } = require("./update_registros");
+const { actualizarExcelTerminados } = require("./update_excel_estado");
 const mysql = require("mysql2/promise");
+const path = require("path");
+
+const ruta = path.resolve(__dirname, "ventas.xlsx");
+const resultadoExcel = leerExcelFiltrado(ruta);
 
 (async () => {
   const dbConfig = {
@@ -12,34 +18,46 @@ const mysql = require("mysql2/promise");
   };
 
   const connection = await mysql.createConnection(dbConfig);
+  const nifsCorregidos = [];
 
-  const nif = "H28609964";
-  const resultado = await consultarPorNif(nif,dbConfig);
+  for (const nif of resultadoExcel) {
+    try {
+      const resultado = await consultarPorNif(nif, dbConfig);
 
-  // Orden incorrecto de las ventas
-  if (resultado.orderVisitaCorrecto === false) {
-    const fechas = await getFechasPdf([nif]);
-    
-    for (const item of resultado.details) {
-      if (resultado.details.length === 2) {
-        if (item.visitada === 1 && item.visitSheet_id !== null) {
-          console.log(item.visitSheetData.createdAt);
-
-          for (const item2 of fechas) {
-            // Si la fecha del pdf es igual a la del visitSheet de la db
-            if (item2.fecha === item.visitSheetData.createdAt) {
-              if (fechas.length === 1) {
-                console.log("✅ Solo hay un pdf y sus fechas son iguales pero el orden es distinto");
-                await corregirOrden(connection, resultado); // <--- Aquí llamas correctamente
-              }
-            }
-          }
-        }
+      if (resultado.orderVisitaCorrecto === true) {
+        console.log(`✅ ${nif} ya está ordenado correctamente.`);
+        nifsCorregidos.push(nif); // 💾 marcar como terminado igualmente
+        continue;
       }
+      if (resultado.orderVisitaCorrecto === false && resultado.details.length === 2) {
+        const fechas = await getFechasPdf([nif]);
+
+        const detalleVisitado = resultado.details.find(d => d.visitada === 1 && d.visitSheet_id !== null);
+        const fechaVisita = detalleVisitado?.visitSheetData?.createdAt;
+
+
+        if (fechaVisita && fechas.length === 1 && fechas[0].fecha === fechaVisita) {
+          console.log(`✅ Corrigiendo ${nif}...`);
+          const ok = await corregirOrden(connection, resultado);
+          if (ok) {
+            nifsCorregidos.push(nif);
+          }
+        } else {
+          console.log(`⏭️ NIF ${nif} no cumple condiciones de fecha/PDF.`);
+        }
+      } else {
+        console.log(`✅ ${nif} ya está ordenado o no tiene 2 detalles.`);
+      }
+    } catch (err) {
+      console.error(`❌ Error procesando ${nif}:`, err.message);
     }
   }
 
-//   console.log(resultado);
-
   await connection.end();
+
+  if (nifsCorregidos.length > 0) {
+    actualizarExcelTerminados(ruta, nifsCorregidos);
+  } else {
+    console.log("⚠️ No se corrigió ningún NIF.");
+  }
 })();
