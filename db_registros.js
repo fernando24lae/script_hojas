@@ -9,7 +9,7 @@ async function consultarPorNif(nif,db) {
 
     // 1. CONSULTA PROPIEDAD
     const [properties] = await connection.execute(
-      "SELECT id, aaff_id, razonSocial, status FROM properties WHERE nif = ?",
+      "SELECT id, aaff_id,nif, razonSocial, status FROM properties WHERE nif = ?",
       [nif]
     );
 
@@ -38,11 +38,11 @@ async function consultarPorNif(nif,db) {
       );
     }
 
-    console.log("✅ No hay observación de no visita, continuando...");
+    // console.log("✅ No hay observación de no visita, continuando...");
 
     // 3. CONSULTA SALES
     const [sales] = await connection.execute(
-      "SELECT * FROM sales WHERE prop_id = ? AND servp_id IN (?, ?, ?, ?) AND status = true",
+      "SELECT * FROM sales WHERE prop_id = ? AND servp_id IN (?, ?, ?, ?) AND status = true AND workcenter_id IS NULL",
       [prop.id, 1, 3, 6, 7]
     );
 
@@ -88,7 +88,7 @@ async function consultarPorNif(nif,db) {
       });
 
       console.log(
-        `✅ Se encontraron ${visitSheets.length} registros en visitsheet.`
+        `Se encontró ${visitSheets.length} visitsheet en details_caes.`
       );
     }
 
@@ -131,11 +131,11 @@ async function consultarPorNif(nif,db) {
 
     return consultaUnificadaFinal;
   } catch (err) {
-    console.error("❌ Error crítico:", err.message);
+    console.error("❌ Error en la obtencion de los datos de la ccpp:", err.message);
     return null;
   } finally {
     // await connection.end();
-    console.log("🔌 Conexión cerrada.");
+      // console.log("🔌 Conexión cerrada.");
   }
 }
 
@@ -163,7 +163,7 @@ function validarVisitas(data) {
   }
 
   if (errores.length > 0) {
-    console.log("❌ Se encontraron visitas en orden incorrecto:");
+    console.log("Se encontraron visitas en orden incorrecto:");
     errores.forEach((err) => {
       console.log(
         `- sale_id: ${err.sale_id} | Fecha: ${

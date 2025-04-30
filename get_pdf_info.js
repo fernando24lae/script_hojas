@@ -33,56 +33,31 @@ async function checkPdf(containerClient, nif, fileName) {
     const buffer = await streamToBuffer(response.readableStreamBody);
     const fechaInfo = await extractFecha(buffer);
 
-    if (!fechaInfo) {
-      console.log(`⚠️ [${nif}] "${fileName}": ❌ No se encontró la fecha de visita`);
-      return null;
-    }
+    if (!fechaInfo || fechaInfo.year < 2000) return null;
 
-    if (fechaInfo.year < 2000) {
-      console.log(`❌ [${nif}] "${fileName}": Fecha anterior al 2000`);
-      return null;
-    }
-
-    console.log(`✅ [${nif}] "${fileName}": 📅 ${fechaInfo.date}`);
-    return fechaInfo.date;
-
-  } catch (error) {
-    console.warn(`❌ [${nif}] "${fileName}": Error al descargar o procesar - ${error.message}`);
+    return { pdf: fileName, fecha: fechaInfo.date };
+  } catch {
     return null;
   }
 }
 
-async function getFechasVisitaPorNif(nifArray) {
+async function getFechasPdf(nifArray) {
   const AZURE_STORAGE_CONNECTION_STRING = process.env.AZURE_STORAGE_CONNECTION_STRING;
   const containerName = "fincas";
   const blobServiceClient = BlobServiceClient.fromConnectionString(AZURE_STORAGE_CONNECTION_STRING);
   const containerClient = blobServiceClient.getContainerClient(containerName);
 
-  const resultadosPorNif = {};
+  const nif = nifArray[0]; // Solo procesamos el primer NIF
+  // console.log(`\n🔍 Procesando NIF: ${nif}`);
 
-  for (const nif of nifArray) { 
-    console.log(`\n🔍 Procesando NIF: ${nif}`);
-    const resultados = {};
+  const resultados = [];
 
-    // Validar que exista el principal
-    const fechaPrincipal = await checkPdf(containerClient, nif, pdfFiles[0]);
-
-    if (!fechaPrincipal) {
-      console.log(`⛔ [${nif}] Falta el archivo obligatorio "${pdfFiles[0]}" — omitiendo este NIF.`);
-      continue;
-    }
-
-    resultados[pdfFiles[0]] = fechaPrincipal;
-
-    for (let i = 1; i < pdfFiles.length; i++) {
-      const fecha = await checkPdf(containerClient, nif, pdfFiles[i]);
-      if (fecha) resultados[pdfFiles[i]] = fecha;
-    }
-
-    resultadosPorNif[nif] = resultados;
+  for (const file of pdfFiles) {
+    const item = await checkPdf(containerClient, nif, file);
+    if (item) resultados.push(item);
   }
 
-  return resultadosPorNif;
+  return resultados;
 }
 
 function streamToBuffer(readableStream) {
@@ -95,10 +70,8 @@ function streamToBuffer(readableStream) {
 }
 
 // EJEMPLO DE USO
-// const nifs = ["H25763103"];
-// getFechasVisitaPorNif(nifs).then(result => {
-//   console.log( result);
-// }).catch(console.error);
+// getFechasPdf(["H25763103"]).then(console.log).catch(console.error);
+
 module.exports = {
-    getFechasVisitaPorNif
-  };
+  getFechasPdf
+};
