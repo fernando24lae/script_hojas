@@ -10,7 +10,7 @@ function leerExcelFiltrado(rutaArchivo) {
 
   for (let i = 0; i < datos.length; i++) {
     const fila = datos[i];
-    console.log(`🔎 Fila ${i + 1}:`, fila); // 👈 importante
+    // console.log(`🔎 Fila ${i + 1}:`, fila); // 👈 importante
 
     const colB = String(fila[0] || "").trim();
     const colC = String(fila[1] || "").toLowerCase().trim();
