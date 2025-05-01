@@ -29,35 +29,53 @@ async function checkPdf(containerClient, nif, fileName) {
   const blobClient = containerClient.getBlobClient(blobPath);
 
   try {
+
     const response = await blobClient.download();
     const buffer = await streamToBuffer(response.readableStreamBody);
     const fechaInfo = await extractFecha(buffer);
 
     if (!fechaInfo || fechaInfo.year < 2000) return null;
-
     return { pdf: fileName, fecha: fechaInfo.date };
-  } catch {
-    return null;
+
+  } catch (error) {
+    // console.error("❌ Error al descargar PDF: "+fileName, error.message, error.statusCode, error.details);
+    // return null; 
+
+    // Silenciar errores individuales por archivos no encontrados o sin permisos
+    if (error.statusCode === 404 || error.statusCode === 403) return null;
+    // Re-lanzar errores críticos (p. ej. problemas de conexión)
+    throw error;
   }
 }
 
 async function getFechasPdf(nifArray) {
-  const AZURE_STORAGE_CONNECTION_STRING = process.env.AZURE_STORAGE_CONNECTION_STRING;
-  const containerName = "fincas";
-  const blobServiceClient = BlobServiceClient.fromConnectionString(AZURE_STORAGE_CONNECTION_STRING);
-  const containerClient = blobServiceClient.getContainerClient(containerName);
+  try {
+    const AZURE_STORAGE_CONNECTION_STRING = process.env.AZURE_STORAGE_CONNECTION_STRING;
+    const containerName = "fincas";
+    const blobServiceClient = BlobServiceClient.fromConnectionString(AZURE_STORAGE_CONNECTION_STRING);
+    const containerClient = blobServiceClient.getContainerClient(containerName);
 
-  const nif = nifArray[0]; // Solo procesamos el primer NIF
-  // console.log(`\n🔍 Procesando NIF: ${nif}`);
+    const nif = nifArray[0]; // Solo procesamos el primer NIF
+    // console.log(`\n🔍 Procesando NIF: ${nif}`);
 
-  const resultados = [];
+    const resultados = [];
 
-  for (const file of pdfFiles) {
-    const item = await checkPdf(containerClient, nif, file);
-    if (item) resultados.push(item);
+    for (const file of pdfFiles) {
+      const item = await checkPdf(containerClient, nif, file);
+      if (item) resultados.push(item);
+    }
+
+    if (resultados.length === 0) {
+      console.warn(`⚠️ No se encontró ningún PDF válido para el NIF: ${nif}`);
+    }
+    console.log(`Fechas de los pdf ${nif} :`,resultados);
+    return resultados;
+  } catch (error) {
+    // console.log("Error al obtener las fechas de los pdf", error);
+    console.error("❌ Error crítico al conectar con Azure Blob Storage:", error.message);
+
   }
 
-  return resultados;
 }
 
 function streamToBuffer(readableStream) {
@@ -68,9 +86,6 @@ function streamToBuffer(readableStream) {
     readableStream.on("error", reject);
   });
 }
-
-// EJEMPLO DE USO
-// getFechasPdf(["H25763103"]).then(console.log).catch(console.error);
 
 module.exports = {
   getFechasPdf

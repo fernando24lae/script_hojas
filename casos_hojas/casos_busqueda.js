@@ -1,36 +1,37 @@
 const { getFechasPdf } = require("../get_pdf_info");
 const { actualizarDosVentasDosPdf, actualizarDosVentasUnPdf } = require("./casos_actualizar");
 
-const casoDosVentasUnPdf = async (resultado,connection,nif) => {
+const casoDosVentasUnPdf = async (resultado, connection, nif, fechas) => {
   //Si no esta ordenado y si solo tiene 2 ventas
   if (
     resultado.orderVisitaCorrecto === false &&
     resultado.details.length === 2
   ) {
-    const fechas = await getFechasPdf([resultado.properties.nif]);
+    // const fechas = await getFechasPdf([resultado.properties.nif]);
 
     //Obtenemos el details_cae visitado erroneamente junto con su fecha de visista
     const detalleVisitado = resultado.details.find(d => d.visitada === 1 && d.visitSheet_id !== null);
     const fechaVisita = detalleVisitado?.visitSheetData?.createdAt;
-    
+
     //Tiene un pdf en azure,
     if (fechaVisita && fechas.length === 1 && fechas[0].fecha === fechaVisita) {
       console.log("Esta CCPP solo tiene 1 pdf en azure");
       const correcionRegistros = await actualizarDosVentasUnPdf(connection, resultado);
 
-      console.log(correcionRegistros);
+      // console.log(correcionRegistros);
       return correcionRegistros && { ok: true };
     }
-    return { ok: false };
   }
+  return { ok: false };
+
 };
-const casoDosVentasDosPdf = async (resultado,connection,nif) => {
+const casoDosVentasDosPdf = async (resultado, connection, nif, fechas) => {
   //Si no esta ordenado y si solo tiene 2 ventas
   if (
     resultado.orderVisitaCorrecto === false &&
     resultado.details.length === 2
   ) {
-    const fechas = await getFechasPdf([resultado.properties.nif]);
+    // const fechas = await getFechasPdf([resultado.properties.nif]);
     //Tiene dos pdf en azure
     if (fechas.length === 2) {
       console.log("Esta CCPP tiene 2 pdf en azure");
@@ -42,13 +43,12 @@ const casoDosVentasDosPdf = async (resultado,connection,nif) => {
       );
       const correcionRegistros = await actualizarDosVentasDosPdf(connection, fechasAsignadas, nif);
 
-      console.log(correcionRegistros);
+      // console.log(correcionRegistros);
       return correcionRegistros && { ok: true };
-
     }
-    return { ok: false };
-
   }
+
+  return { ok: false };
 };
 
 function asignarFechasPorCoincidencia(fechasPdf, details) {
@@ -131,11 +131,9 @@ function asignarFechasPorCoincidencia(fechasPdf, details) {
   } else {
     return {
       ok: false,
-      reason: `La fecha del PDF a asignar (${
-        pdfNoUsado.fecha
-      }) no es posterior al saleDate del detail sin coincidencia (${
-        saleDateUnmatched.toISOString().split("T")[0]
-      })`,
+      reason: `La fecha del PDF a asignar (${pdfNoUsado.fecha
+        }) no es posterior al saleDate del detail sin coincidencia (${saleDateUnmatched.toISOString().split("T")[0]
+        })`,
       detalleRechazado: unmatchedDetail,
       pdfNoAsignado: pdfNoUsado.fecha,
     };

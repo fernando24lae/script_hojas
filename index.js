@@ -11,6 +11,7 @@ const {
   leerExcelFiltrado,
   actualizarExcelCorrectasPorDefecto,
 } = require("./excel_datos");
+const { getFechasPdf } = require("./get_pdf_info");
 
 const isDev = process.env.NODE_ENV !== "production";
 const ruta = path.resolve(__dirname, "ventas_v2.xlsx");
@@ -43,14 +44,16 @@ const resultadoExcel = leerExcelFiltrado(ruta);
       
       // Consultar la base de datos por NIF
       const resultado = await consultarPorNif(nif, dbConfig);
-
+      const fechas = await getFechasPdf([resultado.properties.nif]);
+      
       // Verificamos si ya estaba correcto
       if (resultado.orderVisitaCorrecto === true) {
         listaResultadosCorrectos.push({ nif, resultado });
         continue; // saltamos a la siguiente iteración
       }
 
-      const salida = await ejecutarCasosEnCadena(resultado, connection, nif, [
+      
+      const salida = await ejecutarCasosEnCadena(resultado, connection, nif,fechas, [
         casoDosVentasDosPdf,
         casoDosVentasUnPdf,
       ]);
@@ -74,13 +77,13 @@ const resultadoExcel = leerExcelFiltrado(ruta);
   if (nifsCorregidos.length > 0) {
     actualizarExcelTerminados(ruta, nifsCorregidos);
   } else {
-    console.log("⚠️ No se corrigió ningún NIF.");
+    console.log("⛔ No se corrigió ningún NIF.");
   }
 })();
 
-async function ejecutarCasosEnCadena(resultado, connection, nif, casos) {
+async function ejecutarCasosEnCadena(resultado, connection, nif, fechas, casos) {
   for (const caso of casos) {
-    const salida = await caso(resultado, connection, nif);
+    const salida = await caso(resultado, connection, nif, fechas);
     if (salida && salida.ok) {
       return salida; // Caso resuelto
     }
