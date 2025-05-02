@@ -10,6 +10,7 @@ const {
   actualizarExcelTerminados,
   leerExcelFiltrado,
   actualizarExcelCorrectasPorDefecto,
+  actualizarExcelWorkcenter,
 } = require("./excel_datos");
 const { getFechasPdf } = require("./get_pdf_info");
 
@@ -37,6 +38,7 @@ const resultadoExcel = leerExcelFiltrado(ruta);
   const connection = await mysql.createConnection(dbConfig);
   const nifsCorregidos = [];
   const listaResultadosCorrectos = [];
+  const listaWorkcenter = [];
 
   // Leer el archivo Excel filtrado
   for (const nif of resultadoExcel) {
@@ -47,23 +49,31 @@ const resultadoExcel = leerExcelFiltrado(ruta);
       const fechas = await getFechasPdf([resultado.properties.nif]);
       
       // Verificamos si ya estaba correcto
-      if (resultado.orderVisitaCorrecto === true) {
+      if (resultado.orderVisitaCorrecto === true && resultado.workcenter == false) {
         listaResultadosCorrectos.push({ nif, resultado });
         continue; // saltamos a la siguiente iteración
       }
-
-      
-      const salida = await ejecutarCasosEnCadena(resultado, connection, nif,fechas, [
-        casoDosVentasDosPdf,
-        casoDosVentasUnPdf,
-      ]);
-
-      if (salida) {
-        console.log(`✅ Caso resuelto para ${nif}`);
-        nifsCorregidos.push(nif);
-      } else {
-        console.log(`⚠️ Ningún caso aplicable para ${nif}`);
+      // Verificamos si es un workcenter
+      if (resultado.workcenter == true) {
+        listaWorkcenter.push({ nif, resultado });
+        continue; // saltamos a la siguiente iteración
       }
+
+      if (!resultado.workcenter) {
+        const salida = await ejecutarCasosEnCadena(resultado, connection, nif,fechas, [
+          casoDosVentasDosPdf,
+          casoDosVentasUnPdf,
+        ]);
+        if (salida) {
+          console.log(`✅ Caso resuelto para ${nif}`);
+          nifsCorregidos.push(nif);
+        } else {
+          console.log(`⚠️ Ningún caso aplicable para ${nif}`);
+        }
+      }
+
+
+
     } catch (error) {
       console.error(`❌ Error procesando ${nif}:`, error.message);
     }
@@ -71,6 +81,9 @@ const resultadoExcel = leerExcelFiltrado(ruta);
   // Cerrar la conexión a la base de datos
   await connection.end();
 
+  if (listaWorkcenter.length > 0) {
+    actualizarExcelWorkcenter(ruta, listaWorkcenter);
+  }
   if (listaResultadosCorrectos.length > 0) {
     actualizarExcelCorrectasPorDefecto(ruta, listaResultadosCorrectos);
   }

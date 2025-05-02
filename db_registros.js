@@ -42,9 +42,18 @@ async function consultarPorNif(nif,db) {
 
     // 3. CONSULTA SALES
     const [sales] = await connection.execute(
-      "SELECT * FROM sales WHERE prop_id = ? AND servp_id IN (?, ?, ?, ?) AND status = true AND workcenter_id IS NULL",
+      "SELECT * FROM sales WHERE prop_id = ? AND servp_id IN (?, ?, ?, ?) AND status = true",
       [prop.id, 1, 3, 6, 7]
     );
+    
+    let workcenterStatus = false;
+    const checkWorkcenter = sales.some(
+      (sale) => sale.workcenter_id !== null
+    )
+    //marcamos como workcenter si existe al menos una venta con workcenter_id
+    if (checkWorkcenter) {
+      workcenterStatus = true;
+    };
 
     if (sales.length === 0)
       throw new Error(
@@ -127,6 +136,7 @@ async function consultarPorNif(nif,db) {
       details: detailsConVisitas,
       docs: docs,
       orderVisitaCorrecto: orderVisitaCorrecto, // <-- Aquí agregamos el booleano
+      workcenter : workcenterStatus
     };
 
     return consultaUnificadaFinal;

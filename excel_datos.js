@@ -80,4 +80,31 @@ function actualizarExcelCorrectasPorDefecto(rutaArchivo, listaResultados) {
     console.log(`📄 Excel actualizado con ${listaResultados.length} NIF(s) marcados como "correcta_por_defecto".`);
   }
 
-module.exports = { actualizarExcelTerminados,leerExcelFiltrado,actualizarExcelCorrectasPorDefecto };
+  function actualizarExcelWorkcenter(rutaArchivo, listaResultados) {
+    const workbook = xlsx.readFile(rutaArchivo);
+    const hoja = workbook.Sheets[workbook.SheetNames[0]];
+    const datos = xlsx.utils.sheet_to_json(hoja, { header: 1, defval: "" });
+  
+    const nuevosDatos = datos.map(fila => {
+      const nif = String(fila[0] || "").trim();
+      const estado = String(fila[1] || "").toLowerCase().trim();
+  
+      const resultadoItem = listaResultados.find(
+        r => r.nif === nif && r.resultado?.workcenter === true
+      );
+  
+      if (resultadoItem && estado === "corregir") {
+        return [nif, "workcenter"];
+      }
+  
+      return fila;
+    });
+  
+    const nuevaHoja = xlsx.utils.aoa_to_sheet(nuevosDatos);
+    workbook.Sheets[workbook.SheetNames[0]] = nuevaHoja;
+    xlsx.writeFile(workbook, rutaArchivo);
+  
+    console.log(`📄 Excel actualizado con ${listaResultados.length} NIF(s) marcados como "workcenter".`);
+  }
+
+module.exports = { actualizarExcelTerminados,leerExcelFiltrado,actualizarExcelCorrectasPorDefecto,actualizarExcelWorkcenter };

@@ -1,5 +1,6 @@
 async function actualizarDosVentasDosPdf(connection, resultadoFinal, nif) {
   try {
+    
     const detail = resultadoFinal.unmatched.detail;
     const saleId = detail.sale_id;
     const hojaVisitaNombre = resultadoFinal.unmatched.nombre_pdf;

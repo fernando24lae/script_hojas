@@ -2,6 +2,11 @@ const { getFechasPdf } = require("../get_pdf_info");
 const { actualizarDosVentasDosPdf, actualizarDosVentasUnPdf } = require("./casos_actualizar");
 
 const casoDosVentasUnPdf = async (resultado, connection, nif, fechas) => {
+  
+  if (resultado.sales.length > 2) {
+    console.log("Esta CCPP tiene más de 2 ventas, no se puede corregir.");
+    return { ok: false };
+  }
   //Si no esta ordenado y si solo tiene 2 ventas
   if (
     resultado.orderVisitaCorrecto === false &&
@@ -26,6 +31,10 @@ const casoDosVentasUnPdf = async (resultado, connection, nif, fechas) => {
 
 };
 const casoDosVentasDosPdf = async (resultado, connection, nif, fechas) => {
+  if (resultado.sales.length > 2) {
+    console.log("Esta CCPP tiene más de 2 ventas, no se puede corregir.");
+    return { ok: false };
+  }
   //Si no esta ordenado y si solo tiene 2 ventas
   if (
     resultado.orderVisitaCorrecto === false &&
@@ -129,6 +138,10 @@ function asignarFechasPorCoincidencia(fechasPdf, details) {
       },
     };
   } else {
+    console.warn(`La fecha del PDF a asignar (${pdfNoUsado.fecha
+        }) no es posterior al saleDate del detail sin coincidencia (${saleDateUnmatched.toISOString().split("T")[0]
+        })`);
+    
     return {
       ok: false,
       reason: `La fecha del PDF a asignar (${pdfNoUsado.fecha
