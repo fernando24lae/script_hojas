@@ -5,6 +5,7 @@ const {
   casoDosVentas,
   casoDosVentasDosPdf,
   casoDosVentasUnPdf,
+  casoTresVentasDosPdf,
 } = require("./casos_hojas/casos_busqueda");
 const {
   actualizarExcelTerminados,
@@ -63,6 +64,7 @@ const resultadoExcel = leerExcelFiltrado(ruta);
         const salida = await ejecutarCasosEnCadena(resultado, connection, nif,fechas, [
           casoDosVentasDosPdf,
           casoDosVentasUnPdf,
+          casoTresVentasDosPdf
         ]);
         if (salida) {
           console.log(`✅ Caso resuelto para ${nif}`);

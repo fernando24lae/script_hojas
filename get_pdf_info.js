@@ -9,7 +9,7 @@ const pdfFiles = [
   "hoja-visita_2022.pdf",
   "hoja-visita_2023.pdf",
   "hoja-visita_2024.pdf",
-  "hoja-visita_2025.pdf"
+  "hoja-visita_2025.pdf",
 ];
 
 async function extractFecha(buffer) {
