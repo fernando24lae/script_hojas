@@ -1,3 +1,4 @@
+//Cambia el unmached que siempre será 1 si solo hay un resuletado que añadir
 async function actualizarDosVentasDosPdf(connection, resultadoFinal, nif) {
   try {
     
@@ -63,7 +64,6 @@ async function actualizarDosVentasDosPdf(connection, resultadoFinal, nif) {
     return false;
   }
 }
-
 async function actualizarDosVentasUnPdf(connection, consulta) {
   try {
     await connection.beginTransaction(); // ⏳ INICIAR TRANSACCIÓN

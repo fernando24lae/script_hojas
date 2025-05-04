@@ -6,6 +6,7 @@ const {
   casoDosVentasDosPdf,
   casoDosVentasUnPdf,
   casoTresVentasDosPdf,
+  casoTresVentasDosPdf2V,
 } = require("./casos_hojas/casos_busqueda");
 const {
   actualizarExcelTerminados,
@@ -40,7 +41,7 @@ const resultadoExcel = leerExcelFiltrado(ruta);
   const nifsCorregidos = [];
   const listaResultadosCorrectos = [];
   const listaWorkcenter = [];
-
+  let tipoCaso = null;
   // Leer el archivo Excel filtrado
   for (const nif of resultadoExcel) {
     try {
@@ -61,14 +62,18 @@ const resultadoExcel = leerExcelFiltrado(ruta);
       }
 
       if (!resultado.workcenter) {
-        const salida = await ejecutarCasosEnCadena(resultado, connection, nif,fechas, [
+        const salida = await ejecutarCasosEnCadena(resultado, connection, nif,fechas,  [
           casoDosVentasDosPdf,
           casoDosVentasUnPdf,
-          casoTresVentasDosPdf
+          casoTresVentasDosPdf,
+          casoTresVentasDosPdf2V
         ]);
+
         if (salida) {
-          console.log(`✅ Caso resuelto para ${nif}`);
-          nifsCorregidos.push(nif);
+          console.log(`✅ Caso resuelto para ${nif} - Tipo: ${salida.tipo}`);
+          // nifsCorregidos.push(nif);
+          nifsCorregidos.push({ nif, tipo: salida.tipo });
+
         } else {
           console.log(`⚠️ Ningún caso aplicable para ${nif}`);
         }
@@ -90,7 +95,7 @@ const resultadoExcel = leerExcelFiltrado(ruta);
     actualizarExcelCorrectasPorDefecto(ruta, listaResultadosCorrectos);
   }
   if (nifsCorregidos.length > 0) {
-    actualizarExcelTerminados(ruta, nifsCorregidos);
+    actualizarExcelTerminados(ruta, nifsCorregidos, tipoCaso);
   } else {
     console.log("⛔ No se corrigió ningún NIF.");
   }

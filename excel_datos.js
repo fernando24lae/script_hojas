@@ -5,7 +5,7 @@ const xlsx = require("xlsx");
  * @param {string} rutaArchivo - Ruta al archivo Excel
  * @param {string[]} listaNIFsTerminados - Lista de NIFs corregidos
  */
-function actualizarExcelTerminados(rutaArchivo, listaNIFsTerminados) {
+function actualizarExcelTerminados(rutaArchivo, listaNIFsTerminados,tipoCaso) {
   const workbook = xlsx.readFile(rutaArchivo);
   const hoja = workbook.Sheets[workbook.SheetNames[0]];
   const datos = xlsx.utils.sheet_to_json(hoja, { header: 1, defval: "" });
@@ -13,11 +13,12 @@ function actualizarExcelTerminados(rutaArchivo, listaNIFsTerminados) {
   const nuevosDatos = datos.map(fila => {
     const nif = String(fila[0]).trim();
     const estado = String(fila[1] || "").toLowerCase().trim();
+    const caso = listaNIFsTerminados.find(item => item.nif === nif);
 
-    if (listaNIFsTerminados.includes(nif) && estado === "corregir") {
-      return [nif, "terminado"];
+    if (caso && estado === "corregir") {
+      return [nif, "terminado", caso.tipo];
     }
-    return fila;
+    return fila.length >= 3 ? fila : [...fila, ""];
   });
 
   const nuevaHoja = xlsx.utils.aoa_to_sheet(nuevosDatos);
