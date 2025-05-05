@@ -85,7 +85,7 @@ const casoTresVentasDosPdf = async (resultado, connection, nif, fechas, tipoCaso
 
       const fechasAsignadas = asignarFechasTresVentasDosPdf(
         fechas,
-        resultado.details
+        resultado
       );
       // console.log(fechasAsignadas);
       if (fechasAsignadas.ok && fechasAsignadas.unmatched) {
@@ -233,7 +233,10 @@ function asignarFechasPorCoincidencia(fechasPdf, details) {
   }
 }
 
-function asignarFechasTresVentasDosPdf(fechasPdf, details) {
+function asignarFechasTresVentasDosPdf(fechasPdf, data) {
+  const details = data.details;
+  const docs = data.docs;
+
   // 1. Parsear fechas del PDF (formato 'DD-MM-YYYY')
   const fechasParsed = fechasPdf.map((f) => {
     const [day, month, year] = f.fecha.split("-");
@@ -255,13 +258,11 @@ function asignarFechasTresVentasDosPdf(fechasPdf, details) {
     };
   }
 
-  // 🛑 NUEVO: validar que no haya más de uno con visitSheet
+  // 3. Validar que no haya más de uno con visitSheet
   if (detailsConVisita.length > 1) {
     return {
       ok: false,
-      reason:
-        "Hay más de un visitsheet en los detalles y la lógica solo permite uno para la asignación por descarte",
-      // detallesConVisita,
+      reason: "Hay más de un visitsheet en los detalles y la lógica solo permite uno para la asignación por descarte",
       pdfsDisponibles: fechasPdf,
     };
   }
@@ -269,7 +270,7 @@ function asignarFechasTresVentasDosPdf(fechasPdf, details) {
   let matchedDetail = null;
   let pdfUsado = null;
 
-  // 3. Buscar coincidencia exacta entre visitsheet.createdAt y fecha de PDF
+  // 4. Buscar coincidencia exacta entre visitsheet.createdAt y fecha de PDF
   for (const detail of detailsConVisita) {
     const fechaVisita = detail.visitSheetData.createdAt;
     const [day, month, year] = fechaVisita.split("-");
@@ -289,20 +290,33 @@ function asignarFechasTresVentasDosPdf(fechasPdf, details) {
   if (!matchedDetail) {
     return {
       ok: false,
-      reason:
-        "Ningún visitSheetData.createdAt coincide con las fechas de los PDFs",
-      // detallesConVisita,
+      reason: "Ningún visitSheetData.createdAt coincide con las fechas de los PDFs",
       pdfsDisponibles: fechasPdf,
     };
   }
 
-  // 4. Encontrar el otro PDF (no usado)
+  // 5. Encontrar el otro PDF (no usado)
   const pdfNoUsado = fechasParsed.find((f) => f.fecha !== pdfUsado.fecha);
 
-  // 5. Filtrar los detalles restantes (sin visita y distintos del matched)
+  // 🔍 5.1 Verificar si ya existe en docs (por nombre de archivo dentro de la ruta)
+  const nombrePdf = pdfNoUsado.pdf.toLowerCase();
+  const yaExiste = docs.some((doc) =>
+    typeof doc.ruta === "string" && doc.ruta.toLowerCase().includes(nombrePdf)
+  );
+
+  if (yaExiste) {
+    console.log(`El PDF "${nombrePdf}" ya está enlazado en docsprops`);
+    
+    return {
+      ok: false,
+      reason: `El PDF "${nombrePdf}" ya está enlazado en docsprops`,
+    };
+  }
+
+  // 6. Filtrar los detalles restantes (sin visita y distintos del matched)
   const unmatchedDetails = details.filter((d) => d.id !== matchedDetail.id);
 
-  // 6. Buscar entre los unmatched uno cuya saleDate sea <= a la fecha del PDF no usado
+  // 7. Buscar entre los unmatched uno cuya saleDate sea <= a la fecha del PDF no usado
   let elegido = null;
   for (const detail of unmatchedDetails) {
     const saleDate = new Date(detail.saleDate);
@@ -337,6 +351,7 @@ function asignarFechasTresVentasDosPdf(fechasPdf, details) {
     },
   };
 }
+
 
 function asignarFechasTresVentasDosPdf2v(fechasPdf, details) {
   // 1. Parsear fechas del PDF (formato 'DD-MM-YYYY')
