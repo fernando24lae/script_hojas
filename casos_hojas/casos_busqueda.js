@@ -4,7 +4,13 @@ const {
   actualizarDosVentasUnPdf,
 } = require("./casos_actualizar");
 
-const casoDosVentasUnPdf = async (resultado, connection, nif, fechas, tipoCaso) => {
+const casoDosVentasUnPdf = async (
+  resultado,
+  connection,
+  nif,
+  fechas,
+  tipoCaso
+) => {
   if (resultado.sales.length > 2) {
     // console.log("Esta CCPP tiene más de 2 ventas, no se puede corregir.");
     return { ok: false };
@@ -34,7 +40,13 @@ const casoDosVentasUnPdf = async (resultado, connection, nif, fechas, tipoCaso) 
   }
   return { ok: false };
 };
-const casoDosVentasDosPdf = async (resultado, connection, nif, fechas, tipoCaso) => {
+const casoDosVentasDosPdf = async (
+  resultado,
+  connection,
+  nif,
+  fechas,
+  tipoCaso
+) => {
   if (resultado.sales.length > 2) {
     // console.log("Esta CCPP tiene más de 2 ventas, no se puede corregir.");
     return { ok: false };
@@ -67,7 +79,13 @@ const casoDosVentasDosPdf = async (resultado, connection, nif, fechas, tipoCaso)
   return { ok: false };
 };
 
-const casoTresVentasDosPdf = async (resultado, connection, nif, fechas, tipoCaso) => {
+const casoTresVentasDosPdf = async (
+  resultado,
+  connection,
+  nif,
+  fechas,
+  tipoCaso
+) => {
   if (resultado.sales.length > 3) {
     console.log("Esta CCPP tiene más de 3 ventas, no se puede corregir.");
     return { ok: false };
@@ -83,10 +101,7 @@ const casoTresVentasDosPdf = async (resultado, connection, nif, fechas, tipoCaso
     if (fechas.length === 2) {
       console.log("ENTRARON AL CASO 3 VENTAS 2 PDF");
 
-      const fechasAsignadas = asignarFechasTresVentasDosPdf(
-        fechas,
-        resultado
-      );
+      const fechasAsignadas = asignarFechasTresVentasDosPdf(fechas, resultado);
       // console.log(fechasAsignadas);
       if (fechasAsignadas.ok && fechasAsignadas.unmatched) {
         const correcionRegistros = await actualizarDosVentasDosPdf(
@@ -103,7 +118,13 @@ const casoTresVentasDosPdf = async (resultado, connection, nif, fechas, tipoCaso
   }
 };
 
-const casoTresVentasDosPdf2V = async (resultado, connection, nif, fechas, tipoCaso) => {
+const casoTresVentasDosPdf2V = async (
+  resultado,
+  connection,
+  nif,
+  fechas,
+  tipoCaso
+) => {
   if (resultado.sales.length > 3) {
     console.log("Esta CCPP tiene más de 3 ventas, no se puede corregir.");
     return { ok: false };
@@ -217,16 +238,20 @@ function asignarFechasPorCoincidencia(fechasPdf, details) {
     };
   } else {
     console.warn(
-      `La fecha del PDF a asignar (${pdfNoUsado.fecha
-      }) no es posterior al saleDate del detail sin coincidencia (${saleDateUnmatched.toISOString().split("T")[0]
+      `La fecha del PDF a asignar (${
+        pdfNoUsado.fecha
+      }) no es posterior al saleDate del detail sin coincidencia (${
+        saleDateUnmatched.toISOString().split("T")[0]
       })`
     );
 
     return {
       ok: false,
-      reason: `La fecha del PDF a asignar (${pdfNoUsado.fecha
-        }) no es posterior al saleDate del detail sin coincidencia (${saleDateUnmatched.toISOString().split("T")[0]
-        })`,
+      reason: `La fecha del PDF a asignar (${
+        pdfNoUsado.fecha
+      }) no es posterior al saleDate del detail sin coincidencia (${
+        saleDateUnmatched.toISOString().split("T")[0]
+      })`,
       detalleRechazado: unmatchedDetail,
       pdfNoAsignado: pdfNoUsado.fecha,
     };
@@ -262,7 +287,8 @@ function asignarFechasTresVentasDosPdf(fechasPdf, data) {
   if (detailsConVisita.length > 1) {
     return {
       ok: false,
-      reason: "Hay más de un visitsheet en los detalles y la lógica solo permite uno para la asignación por descarte",
+      reason:
+        "Hay más de un visitsheet en los detalles y la lógica solo permite uno para la asignación por descarte",
       pdfsDisponibles: fechasPdf,
     };
   }
@@ -290,7 +316,8 @@ function asignarFechasTresVentasDosPdf(fechasPdf, data) {
   if (!matchedDetail) {
     return {
       ok: false,
-      reason: "Ningún visitSheetData.createdAt coincide con las fechas de los PDFs",
+      reason:
+        "Ningún visitSheetData.createdAt coincide con las fechas de los PDFs",
       pdfsDisponibles: fechasPdf,
     };
   }
@@ -300,13 +327,14 @@ function asignarFechasTresVentasDosPdf(fechasPdf, data) {
 
   // 🔍 5.1 Verificar si ya existe en docs (por nombre de archivo dentro de la ruta)
   const nombrePdf = pdfNoUsado.pdf.toLowerCase();
-  const yaExiste = docs.some((doc) =>
-    typeof doc.ruta === "string" && doc.ruta.toLowerCase().includes(nombrePdf)
+  const yaExiste = docs.some(
+    (doc) =>
+      typeof doc.ruta === "string" && doc.ruta.toLowerCase().includes(nombrePdf)
   );
 
   if (yaExiste) {
     console.log(`El PDF "${nombrePdf}" ya está enlazado en docsprops`);
-    
+
     return {
       ok: false,
       reason: `El PDF "${nombrePdf}" ya está enlazado en docsprops`,
@@ -315,6 +343,36 @@ function asignarFechasTresVentasDosPdf(fechasPdf, data) {
 
   // 6. Filtrar los detalles restantes (sin visita y distintos del matched)
   const unmatchedDetails = details.filter((d) => d.id !== matchedDetail.id);
+
+  // 🔒 Verificar orden lógico de visitas
+  for (const detail of unmatchedDetails) {
+    const saleDateActual = new Date(detail.saleDate);
+
+    // Si el saleDate actual es anterior al PDF que se quiere asignar
+    if (saleDateActual < pdfNoUsado.fechaDate) {
+      const hayPosteriorNoVisitado = unmatchedDetails.some((otro) => {
+        const saleDateOtro = new Date(otro.saleDate);
+        return saleDateOtro > saleDateActual && otro.visitada === 0;
+      });
+
+      if (hayPosteriorNoVisitado) {
+        console.log(`No se puede asignar el PDF (${
+            pdfNoUsado.fecha
+          }) a la venta con saleDate ${
+            saleDateActual.toISOString().split("T")[0]
+          } porque hay otra venta posterior sin visitar.`);
+        
+        return {
+          ok: false,
+          reason: `No se puede asignar el PDF (${
+            pdfNoUsado.fecha
+          }) a la venta con saleDate ${
+            saleDateActual.toISOString().split("T")[0]
+          } porque hay otra venta posterior sin visitar.`,
+        };
+      }
+    }
+  }
 
   // 7. Buscar entre los unmatched uno cuya saleDate sea <= a la fecha del PDF no usado
   let elegido = null;
@@ -351,7 +409,6 @@ function asignarFechasTresVentasDosPdf(fechasPdf, data) {
     },
   };
 }
-
 
 function asignarFechasTresVentasDosPdf2v(fechasPdf, details) {
   // 1. Parsear fechas del PDF (formato 'DD-MM-YYYY')
@@ -398,7 +455,8 @@ function asignarFechasTresVentasDosPdf2v(fechasPdf, details) {
   if (detallesCoincidentes.length !== 1 || fechasCoincidentes.length !== 1) {
     return {
       ok: false,
-      reason: "Debe haber una sola coincidencia entre un visitSheet y una fecha PDF",
+      reason:
+        "Debe haber una sola coincidencia entre un visitSheet y una fecha PDF",
       // detallesConVisita,
       fechasCoincidentes,
     };
@@ -410,7 +468,8 @@ function asignarFechasTresVentasDosPdf2v(fechasPdf, details) {
   if (!detailSinVisita) {
     return {
       ok: false,
-      reason: "No se encontró un detail sin visitSheet para asignar la tercera fecha",
+      reason:
+        "No se encontró un detail sin visitSheet para asignar la tercera fecha",
       // detalles,
     };
   }
@@ -452,7 +511,11 @@ function asignarFechasTresVentasDosPdf2v(fechasPdf, details) {
   } else {
     return {
       ok: false,
-      reason: `La fecha del PDF a asignar (${fechaParaAsignar.fecha}) es anterior al saleDate del detail sin visita (${saleDateDetail.toISOString().split("T")[0]})`,
+      reason: `La fecha del PDF a asignar (${
+        fechaParaAsignar.fecha
+      }) es anterior al saleDate del detail sin visita (${
+        saleDateDetail.toISOString().split("T")[0]
+      })`,
       pdfNoAsignado: fechaParaAsignar,
       detailRechazado: detailSinVisita,
     };
@@ -463,5 +526,5 @@ module.exports = {
   casoDosVentasUnPdf,
   casoDosVentasDosPdf,
   casoTresVentasDosPdf,
-  casoTresVentasDosPdf2V
+  casoTresVentasDosPdf2V,
 };
