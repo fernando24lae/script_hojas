@@ -258,157 +258,134 @@ function asignarFechasPorCoincidencia(fechasPdf, details) {
   }
 }
 
+
+
 function asignarFechasTresVentasDosPdf(fechasPdf, data) {
   const details = data.details;
   const docs = data.docs;
 
   // 1. Parsear fechas del PDF (formato 'DD-MM-YYYY')
-  const fechasParsed = fechasPdf.map((f) => {
-    const [day, month, year] = f.fecha.split("-");
-    return {
-      ...f,
-      fechaDate: new Date(`${year}-${month}-${day}`),
-    };
+  const fechasParsed = fechasPdf.map(f => {
+    const [day, month, year] = f.fecha.split('-');
+    return { ...f, fechaDate: new Date(`${year}-${month}-${day}`) };
   });
 
-  // 2. Validar que haya al menos un visitsheet
-  const detailsConVisita = details.filter((d) => d.visitSheetData?.createdAt);
-
-  if (detailsConVisita.length === 0) {
+  // 2. Debe haber exactamente un visitsheet
+  const detailsConVisita = details.filter(d => d.visitSheetData?.createdAt);
+  if (detailsConVisita.length !== 1) {
     return {
       ok: false,
-      reason: "Ningún detail tiene visitSheetData",
-      detalles: details,
-      pdfsDisponibles: fechasPdf,
+      reason: detailsConVisita.length === 0
+        ? "Ningún detail tiene visitSheetData"
+        : "Hay más de un visitsheet en los detalles",
+      pdfsDisponibles: fechasPdf
     };
   }
 
-  // 3. Validar que no haya más de uno con visitSheet
-  if (detailsConVisita.length > 1) {
-    return {
-      ok: false,
-      reason:
-        "Hay más de un visitsheet en los detalles y la lógica solo permite uno para la asignación por descarte",
-      pdfsDisponibles: fechasPdf,
-    };
-  }
-
-  let matchedDetail = null;
-  let pdfUsado = null;
-
-  // 4. Buscar coincidencia exacta entre visitsheet.createdAt y fecha de PDF
-  for (const detail of detailsConVisita) {
-    const fechaVisita = detail.visitSheetData.createdAt;
-    const [day, month, year] = fechaVisita.split("-");
-    const fechaDetail = new Date(`${year}-${month}-${day}`);
-
-    const match = fechasParsed.find(
-      (pdf) => pdf.fechaDate.toDateString() === fechaDetail.toDateString()
+  // 3. Determinar cuál detail y PDF ya coinciden
+  let matchedDetail, pdfUsado;
+  const [onlyVisit] = detailsConVisita;
+  {
+    const [d, m, y] = onlyVisit.visitSheetData.createdAt.split('-');
+    const fechaDetail = new Date(`${y}-${m}-${d}`);
+    matchedDetail = onlyVisit;
+    pdfUsado = fechasParsed.find(p =>
+      p.fechaDate.toDateString() === fechaDetail.toDateString()
     );
-
-    if (match) {
-      matchedDetail = detail;
-      pdfUsado = match;
-      break;
-    }
   }
-
-  if (!matchedDetail) {
+  if (!pdfUsado) {
     return {
       ok: false,
-      reason:
-        "Ningún visitSheetData.createdAt coincide con las fechas de los PDFs",
-      pdfsDisponibles: fechasPdf,
+      reason: "Ningún visitSheetData.createdAt coincide con fechas de PDF",
+      pdfsDisponibles: fechasPdf
     };
   }
 
-  // 5. Encontrar el otro PDF (no usado)
-  const pdfNoUsado = fechasParsed.find((f) => f.fecha !== pdfUsado.fecha);
-
-  // 🔍 5.1 Verificar si ya existe en docs (por nombre de archivo dentro de la ruta)
+  // 4. Determinar el PDF restante y comprobar que no exista ya en docsprops
+  const pdfNoUsado = fechasParsed.find(p => p.fecha !== pdfUsado.fecha);
   const nombrePdf = pdfNoUsado.pdf.toLowerCase();
-  const yaExiste = docs.some(
-    (doc) =>
-      typeof doc.ruta === "string" && doc.ruta.toLowerCase().includes(nombrePdf)
-  );
-
-  if (yaExiste) {
-    console.log(`El PDF "${nombrePdf}" ya está enlazado en docsprops`);
-
+  if (docs.some(doc =>
+    typeof doc.ruta === 'string' &&
+    doc.ruta.toLowerCase().includes(nombrePdf)
+  )) {
     return {
       ok: false,
-      reason: `El PDF "${nombrePdf}" ya está enlazado en docsprops`,
+      reason: `El PDF "${nombrePdf}" ya está enlazado en docsprops`
     };
   }
 
-  // 6. Filtrar los detalles restantes (sin visita y distintos del matched)
-  const unmatchedDetails = details.filter((d) => d.id !== matchedDetail.id);
+  // 5. Candidatos: los details que no sean el matched
+  const unmatchedDetails = details.filter(d => d.id !== matchedDetail.id);
 
-  // 🔒 Verificar orden lógico de visitas
-  for (const detail of unmatchedDetails) {
-    const saleDateActual = new Date(detail.saleDate);
+  // 6. Fecha de venta del matched, para ordenar cronológicamente
+  const matchedSaleDate = new Date(matchedDetail.saleDate);
 
-    // Si el saleDate actual es anterior al PDF que se quiere asignar
-    if (saleDateActual < pdfNoUsado.fechaDate) {
-      const hayPosteriorNoVisitado = unmatchedDetails.some((otro) => {
-        const saleDateOtro = new Date(otro.saleDate);
-        return saleDateOtro > saleDateActual && otro.visitada === 0;
-      });
+  // 7. Validación de orden para cada candidato
+  for (const cand of unmatchedDetails) {
+    const saleDateCand = new Date(cand.saleDate);
 
-      if (hayPosteriorNoVisitado) {
-        console.log(`No se puede asignar el PDF (${
-            pdfNoUsado.fecha
-          }) a la venta con saleDate ${
-            saleDateActual.toISOString().split("T")[0]
-          } porque hay otra venta posterior sin visitar.`);
-        
-        return {
-          ok: false,
-          reason: `No se puede asignar el PDF (${
-            pdfNoUsado.fecha
-          }) a la venta con saleDate ${
-            saleDateActual.toISOString().split("T")[0]
-          } porque hay otra venta posterior sin visitar.`,
-        };
-      }
+    // Solo consideramos candidatos con saleDate <= pdfNoUsado
+    if (saleDateCand > pdfNoUsado.fechaDate) continue;
+
+    // Ventas intermedias entre cand y el matched
+    const intermedias = details.filter(d => {
+      const sd = new Date(d.saleDate);
+      return sd > saleDateCand && sd < matchedSaleDate;
+    });
+
+    // Si hay alguna intermedia sin visitar, bloqueamos
+    if (intermedias.some(d => d.visitada === 0) && intermedias.length > 0) {
+      return {
+        ok: false,
+        reason: `No se puede asignar el PDF (${pdfNoUsado.fecha}) a la venta con saleDate ${saleDateCand.toISOString().split('T')[0]} porque existe una venta intermedia sin visitar.`
+      };
     }
   }
 
-  // 7. Buscar entre los unmatched uno cuya saleDate sea <= a la fecha del PDF no usado
-  let elegido = null;
-  for (const detail of unmatchedDetails) {
-    const saleDate = new Date(detail.saleDate);
-    if (saleDate <= pdfNoUsado.fechaDate) {
-      elegido = detail;
-      break;
-    }
-  }
+  // 8. Elegir el primer candidato válido (saleDate <= pdfNoUsado)
+  const elegido = unmatchedDetails.find(d =>
+    new Date(d.saleDate) <= pdfNoUsado.fechaDate
+  );
 
   if (!elegido) {
     return {
       ok: false,
-      reason: `Ningún detail disponible tiene un saleDate anterior o igual a ${pdfNoUsado.fecha}`,
-      pdfNoAsignado: pdfNoUsado,
-      detallesRechazados: unmatchedDetails,
+      reason: `Ningún detail tiene saleDate anterior o igual a ${pdfNoUsado.fecha}`,
+      detallesRechazados: unmatchedDetails
     };
   }
 
+  // 9. Devolver resultado exitoso
   return {
     ok: true,
     matched: {
       detail: matchedDetail,
       fecha: pdfUsado.fecha,
       nombre_pdf: pdfUsado.pdf,
-      status: "coincide",
+      status: "coincide"
     },
     unmatched: {
       detail: elegido,
       nuevaFechaAsignada: pdfNoUsado.fecha,
       nombre_pdf: pdfNoUsado.pdf,
-      status: "asignada por descarte",
-    },
+      status: "asignada por descarte"
+    }
   };
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 function asignarFechasTresVentasDosPdf2v(fechasPdf, details) {
   // 1. Parsear fechas del PDF (formato 'DD-MM-YYYY')
