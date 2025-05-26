@@ -7,6 +7,7 @@ const {
   casoDosVentasUnPdf,
   casoTresVentasDosPdf,
   casoTresVentasDosPdf2V,
+  casoDosVentasUnPdf_dup,
 } = require("./casos_hojas/casos_busqueda");
 const {
   actualizarExcelTerminados,
@@ -50,11 +51,11 @@ const resultadoExcel = leerExcelFiltrado(ruta);
       const resultado = await consultarPorNif(nif, dbConfig);
       const fechas = await getFechasPdf([resultado.properties.nif]);
       
-      // Verificamos si ya estaba correcto
-      if (resultado.orderVisitaCorrecto === true && resultado.workcenter == false) {
-        listaResultadosCorrectos.push({ nif, resultado });
-        continue; // saltamos a la siguiente iteración
-      }
+      // // Verificamos si ya estaba correcto
+      // if (resultado.orderVisitaCorrecto === true && resultado.workcenter == false) {
+      //   listaResultadosCorrectos.push({ nif, resultado });
+      //   continue; // saltamos a la siguiente iteración
+      // }
       // Verificamos si es un workcenter
       if (resultado.workcenter == true) {
         listaWorkcenter.push({ nif, resultado });
@@ -63,10 +64,11 @@ const resultadoExcel = leerExcelFiltrado(ruta);
 
       if (!resultado.workcenter) {
         const salida = await ejecutarCasosEnCadena(resultado, connection, nif,fechas,  [
-          casoDosVentasDosPdf,
-          casoDosVentasUnPdf,
-          casoTresVentasDosPdf,
-          casoTresVentasDosPdf2V
+          // casoDosVentasDosPdf,
+          // casoDosVentasUnPdf,
+          // casoTresVentasDosPdf,
+          // casoTresVentasDosPdf2V
+          casoDosVentasUnPdf_dup
         ]);
 
         if (salida) {

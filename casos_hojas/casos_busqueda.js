@@ -258,27 +258,26 @@ function asignarFechasPorCoincidencia(fechasPdf, details) {
   }
 }
 
-
-
 function asignarFechasTresVentasDosPdf(fechasPdf, data) {
   const details = data.details;
   const docs = data.docs;
 
   // 1. Parsear fechas del PDF (formato 'DD-MM-YYYY')
-  const fechasParsed = fechasPdf.map(f => {
-    const [day, month, year] = f.fecha.split('-');
+  const fechasParsed = fechasPdf.map((f) => {
+    const [day, month, year] = f.fecha.split("-");
     return { ...f, fechaDate: new Date(`${year}-${month}-${day}`) };
   });
 
   // 2. Debe haber exactamente un visitsheet
-  const detailsConVisita = details.filter(d => d.visitSheetData?.createdAt);
+  const detailsConVisita = details.filter((d) => d.visitSheetData?.createdAt);
   if (detailsConVisita.length !== 1) {
     return {
       ok: false,
-      reason: detailsConVisita.length === 0
-        ? "Ningún detail tiene visitSheetData"
-        : "Hay más de un visitsheet en los detalles",
-      pdfsDisponibles: fechasPdf
+      reason:
+        detailsConVisita.length === 0
+          ? "Ningún detail tiene visitSheetData"
+          : "Hay más de un visitsheet en los detalles",
+      pdfsDisponibles: fechasPdf,
     };
   }
 
@@ -286,36 +285,39 @@ function asignarFechasTresVentasDosPdf(fechasPdf, data) {
   let matchedDetail, pdfUsado;
   const [onlyVisit] = detailsConVisita;
   {
-    const [d, m, y] = onlyVisit.visitSheetData.createdAt.split('-');
+    const [d, m, y] = onlyVisit.visitSheetData.createdAt.split("-");
     const fechaDetail = new Date(`${y}-${m}-${d}`);
     matchedDetail = onlyVisit;
-    pdfUsado = fechasParsed.find(p =>
-      p.fechaDate.toDateString() === fechaDetail.toDateString()
+    pdfUsado = fechasParsed.find(
+      (p) => p.fechaDate.toDateString() === fechaDetail.toDateString()
     );
   }
   if (!pdfUsado) {
     return {
       ok: false,
       reason: "Ningún visitSheetData.createdAt coincide con fechas de PDF",
-      pdfsDisponibles: fechasPdf
+      pdfsDisponibles: fechasPdf,
     };
   }
 
   // 4. Determinar el PDF restante y comprobar que no exista ya en docsprops
-  const pdfNoUsado = fechasParsed.find(p => p.fecha !== pdfUsado.fecha);
+  const pdfNoUsado = fechasParsed.find((p) => p.fecha !== pdfUsado.fecha);
   const nombrePdf = pdfNoUsado.pdf.toLowerCase();
-  if (docs.some(doc =>
-    typeof doc.ruta === 'string' &&
-    doc.ruta.toLowerCase().includes(nombrePdf)
-  )) {
+  if (
+    docs.some(
+      (doc) =>
+        typeof doc.ruta === "string" &&
+        doc.ruta.toLowerCase().includes(nombrePdf)
+    )
+  ) {
     return {
       ok: false,
-      reason: `El PDF "${nombrePdf}" ya está enlazado en docsprops`
+      reason: `El PDF "${nombrePdf}" ya está enlazado en docsprops`,
     };
   }
 
   // 5. Candidatos: los details que no sean el matched
-  const unmatchedDetails = details.filter(d => d.id !== matchedDetail.id);
+  const unmatchedDetails = details.filter((d) => d.id !== matchedDetail.id);
 
   // 6. Fecha de venta del matched, para ordenar cronológicamente
   const matchedSaleDate = new Date(matchedDetail.saleDate);
@@ -328,30 +330,34 @@ function asignarFechasTresVentasDosPdf(fechasPdf, data) {
     if (saleDateCand > pdfNoUsado.fechaDate) continue;
 
     // Ventas intermedias entre cand y el matched
-    const intermedias = details.filter(d => {
+    const intermedias = details.filter((d) => {
       const sd = new Date(d.saleDate);
       return sd > saleDateCand && sd < matchedSaleDate;
     });
 
     // Si hay alguna intermedia sin visitar, bloqueamos
-    if (intermedias.some(d => d.visitada === 0) && intermedias.length > 0) {
+    if (intermedias.some((d) => d.visitada === 0) && intermedias.length > 0) {
       return {
         ok: false,
-        reason: `No se puede asignar el PDF (${pdfNoUsado.fecha}) a la venta con saleDate ${saleDateCand.toISOString().split('T')[0]} porque existe una venta intermedia sin visitar.`
+        reason: `No se puede asignar el PDF (${
+          pdfNoUsado.fecha
+        }) a la venta con saleDate ${
+          saleDateCand.toISOString().split("T")[0]
+        } porque existe una venta intermedia sin visitar.`,
       };
     }
   }
 
   // 8. Elegir el primer candidato válido (saleDate <= pdfNoUsado)
-  const elegido = unmatchedDetails.find(d =>
-    new Date(d.saleDate) <= pdfNoUsado.fechaDate
+  const elegido = unmatchedDetails.find(
+    (d) => new Date(d.saleDate) <= pdfNoUsado.fechaDate
   );
 
   if (!elegido) {
     return {
       ok: false,
       reason: `Ningún detail tiene saleDate anterior o igual a ${pdfNoUsado.fecha}`,
-      detallesRechazados: unmatchedDetails
+      detallesRechazados: unmatchedDetails,
     };
   }
 
@@ -362,30 +368,16 @@ function asignarFechasTresVentasDosPdf(fechasPdf, data) {
       detail: matchedDetail,
       fecha: pdfUsado.fecha,
       nombre_pdf: pdfUsado.pdf,
-      status: "coincide"
+      status: "coincide",
     },
     unmatched: {
       detail: elegido,
       nuevaFechaAsignada: pdfNoUsado.fecha,
       nombre_pdf: pdfNoUsado.pdf,
-      status: "asignada por descarte"
-    }
+      status: "asignada por descarte",
+    },
   };
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 function asignarFechasTresVentasDosPdf2v(fechasPdf, details) {
   // 1. Parsear fechas del PDF (formato 'DD-MM-YYYY')
@@ -499,9 +491,49 @@ function asignarFechasTresVentasDosPdf2v(fechasPdf, details) {
   }
 }
 
+//CASOS DE CP DUPLICADO 2024
+const casoDosVentasUnPdf_dup = async (
+  resultado,
+  connection,
+  nif,
+  fechas,
+  tipoCaso
+) => {
+  // Implementación del caso para CP duplicado con 2 ventas y 1 PDF
+  // Aquí iría la lógica específica para este caso
+   if (resultado.sales.length > 2) {
+    // console.log("Esta CCPP tiene más de 2 ventas, no se puede corregir.");
+    return { ok: false };
+  }
+  //Si no esta ordenado y si solo tiene 2 ventas
+  if (
+    resultado.details.length === 2
+  ) {
+    //Obtenemos el details_cae visitado erroneamente junto con su fecha de visista
+    const detalleVisitado = resultado.details.find(
+      (d) => d.visitada === 1 && d.visitSheet_id !== null
+    );
+    const fechaVisita = detalleVisitado?.visitSheetData?.createdAt;
+
+    //Tiene un pdf en azure,
+    if (fechaVisita && fechas.length === 1 && fechas[0].fecha === fechaVisita) {
+      console.log("Esta CCPP solo tiene 1 pdf en azure");
+      // const correcionRegistros = await actualizarDosVentasUnPdf(
+      //   connection,
+      //   resultado
+      // );
+      tipoCaso = "Caso 2 Ventas 1 Pdf en azure";
+      console.log(`Esta CCPP ${nif}: Es el caso tiene 2 Ventas y 1 Pdf`);
+      // return correcionRegistros && { ok: true, tipo: tipoCaso };
+    }
+  }
+  return { ok: false };
+};
+
 module.exports = {
   casoDosVentasUnPdf,
   casoDosVentasDosPdf,
   casoTresVentasDosPdf,
   casoTresVentasDosPdf2V,
+  casoDosVentasUnPdf_dup,
 };
