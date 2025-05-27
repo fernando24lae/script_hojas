@@ -44,12 +44,15 @@ const resultadoExcel = leerExcelFiltrado(ruta);
   const listaWorkcenter = [];
   let tipoCaso = null;
   // Leer el archivo Excel filtrado
-  for (const nif of resultadoExcel) {
+  for (const data of resultadoExcel) {
     try {
       
       // Consultar la base de datos por NIF
-      const resultado = await consultarPorNif(nif, dbConfig);
+      const resultado = await consultarPorNif(data.nif, dbConfig);
       const fechas = await getFechasPdf([resultado.properties.nif]);
+
+      // //Nuevo excel cp duplicados, obtener 2 fecha y saleDate
+      // const secondDateExcel = 
       
       // // Verificamos si ya estaba correcto
       // if (resultado.orderVisitaCorrecto === true && resultado.workcenter == false) {
@@ -58,12 +61,12 @@ const resultadoExcel = leerExcelFiltrado(ruta);
       // }
       // Verificamos si es un workcenter
       if (resultado.workcenter == true) {
-        listaWorkcenter.push({ nif, resultado });
+        listaWorkcenter.push({ nif:data.nif, resultado });
         continue; // saltamos a la siguiente iteración
       }
 
       if (!resultado.workcenter) {
-        const salida = await ejecutarCasosEnCadena(resultado, connection, nif,fechas,  [
+        const salida = await ejecutarCasosEnCadena(resultado, connection, data,fechas,  [
           // casoDosVentasDosPdf,
           // casoDosVentasUnPdf,
           // casoTresVentasDosPdf,
@@ -72,19 +75,19 @@ const resultadoExcel = leerExcelFiltrado(ruta);
         ]);
 
         if (salida) {
-          console.log(`✅ Caso resuelto para ${nif} - Tipo: ${salida.tipo}`);
+          console.log(`✅ Caso resuelto para ${data.nif} - Tipo: ${salida.tipo}`);
           // nifsCorregidos.push(nif);
-          nifsCorregidos.push({ nif, tipo: salida.tipo });
+          nifsCorregidos.push({ nif:data.nif, tipo: salida.tipo });
 
         } else {
-          console.log(`⚠️ Ningún caso aplicable para ${nif}`);
+          console.log(`⚠️ Ningún caso aplicable para ${data.nif}`);
         }
       }
 
 
 
     } catch (error) {
-      console.error(`❌ Error procesando ${nif}:`, error.message);
+      console.error(`❌ Error procesando ${data.nif}:`, error.message);
     }
   }
   // Cerrar la conexión a la base de datos

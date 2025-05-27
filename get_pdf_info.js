@@ -92,6 +92,26 @@ function streamToBuffer(readableStream) {
   });
 }
 
+async function findDateCoordinates(buffer, dateString) {
+  // Carga con pdfjs
+  const loadingTask = pdfjsLib.getDocument({ data: buffer });
+  const pdf = await loadingTask.promise;
+  const page = await pdf.getPage(1);                // asumimos página 1
+  const viewport = page.getViewport({ scale: 1.0 }); // escala 1:1
+
+  // Extrae todos los textos con sus transformaciones
+  const textContent = await page.getTextContent();
+  for (const item of textContent.items) {
+    if (item.str.trim() === dateString) {
+      const [ , , , , x, yPDFjs ] = item.transform;
+      // pdfjs y=distancia desde la esquina **inferior** de la página
+      // viewport.height es la altura en unidades PDF
+      return { x, yPDFjs, pageHeight: viewport.height };
+    }
+  }
+  throw new Error(`No encontré el texto "${dateString}" en la página 1.`);
+}
+
 async function actualizarFechaPdf(nif, originalName, oldDate, newDate, newName) {
   // 1) Inicializar Azure BlobService
   const AZ = process.env.AZURE_STORAGE_CONNECTION_STRING;
@@ -124,30 +144,30 @@ async function actualizarFechaPdf(nif, originalName, oldDate, newDate, newName) 
   const pages = pdfDoc.getPages();
 
   // 5) Ajustes de posición y estilo
-  const x = 200;
-  const y = 600;
-  const width = 120;
-  const height = 15;
-  const fontSize = 7.5;
+  const x = 164;
+  const y = 650;
+  const width = 110;
+  const height = 10;
+  const fontSize = 8.2;
 
-  pages.forEach(page => {
+  const firstPage = pages[0];
     // Ocultar la fecha vieja
-    page.drawRectangle({
-      x,
-      y: y - height + 2,
+    firstPage.drawRectangle({
+      x : x- 2,
+      y: y - 1,
       width,
-      height,
-      color: rgb(1, 1, 1),
+      height : height + 2,
+      color: rgb(1,1,1),
     });
     // Escribir la fecha nueva
-    page.drawText(newDate, {
+    firstPage.drawText(newDate, {
       x,
-      y,
+      y:y + 2,
       size: fontSize,
       font: liberSans,
       color: rgb(0, 0, 0),
     });
-  });
+  
 
   const modifiedPdf = await pdfDoc.save();
 
@@ -159,20 +179,22 @@ async function actualizarFechaPdf(nif, originalName, oldDate, newDate, newName) 
 
   console.log(`✔ "${originalName}" → "${newName}" subido correctamente.`);
 }
+
 // Ejemplo de llamada
-(async () => {
-  try {
-    await actualizarFechaPdf(
-      "H54083365",
-      "hoja-visita_2024.pdf",
-      "26-11-2024",
-      "30-05-2025",
-      "hoja-visita_2023.pdf"
-    );
-  } catch (err) {
-    console.error("Error:", err.message);
-  }
-})();
+// (async () => {
+//   try {
+//     await actualizarFechaPdf(
+//       "H54083365",
+//       "hoja-visita_2024.pdf",
+//       "26-11-2024",
+//       "30-05-2025",
+//       "hoja-visita_2023.pdf"
+//     );
+//   } catch (err) {
+//     console.error("Error:", err.message);
+//   }
+// })();
 module.exports = {
   getFechasPdf,
+  actualizarFechaPdf
 };

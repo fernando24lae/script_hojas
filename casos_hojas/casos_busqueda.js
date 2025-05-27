@@ -1,7 +1,8 @@
-const { getFechasPdf } = require("../get_pdf_info");
+const { getFechasPdf, actualizarFechaPdf } = require("../get_pdf_info");
 const {
   actualizarDosVentasDosPdf,
   actualizarDosVentasUnPdf,
+  actualizarDosVentas_dup,
 } = require("./casos_actualizar");
 
 const casoDosVentasUnPdf = async (
@@ -184,7 +185,7 @@ function asignarFechasPorCoincidencia(fechasPdf, details) {
   let unmatchedDetail = null;
   let pdfUsado = null;
 
-  // 🔁 Buscar coincidencia exacta en visitSheetData.createdAt
+  // Buscar coincidencia exacta en visitSheetData.createdAt
   for (const detail of details) {
     const fechaVisita = detail.visitSheetData?.createdAt;
     if (!fechaVisita) continue;
@@ -203,7 +204,7 @@ function asignarFechasPorCoincidencia(fechasPdf, details) {
     }
   }
 
-  // ❌ Si no se encontró ninguna coincidencia con los PDFs
+  // Si no se encontró ninguna coincidencia con los PDFs
   if (!matchedDetail) {
     return {
       ok: false,
@@ -214,7 +215,7 @@ function asignarFechasPorCoincidencia(fechasPdf, details) {
     };
   }
 
-  // ✅ Hay coincidencia con una de las fechas, intentar asignar la otra por descarte
+  // Hay coincidencia con una de las fechas, intentar asignar la otra por descarte
   unmatchedDetail = details.find((d) => d.id !== matchedDetail.id);
   const pdfNoUsado = fechasParsed.find((f) => f.fecha !== pdfUsado.fecha);
   const saleDateUnmatched = new Date(unmatchedDetail.saleDate);
@@ -258,6 +259,56 @@ function asignarFechasPorCoincidencia(fechasPdf, details) {
   }
 }
 
+function asignarFechasPorCoincidencia2(fechasPdf, details) {
+  // 1) Parseo fechasPdf a Date
+  const parsedFechas = fechasPdf.map((f) => {
+    const [dd, mm, yyyy] = f.split("-").map((x) => parseInt(x, 10));
+    return { string: f, date: new Date(yyyy, mm - 1, dd) };
+  });
+
+  // 2) Verificar coincidencia con ANY visitSheetData.createdAt
+  const matched = details.some((d) => {
+    if (!d.visitSheetData?.createdAt) return false;
+    // const v = new Date(d.visitSheetData.createdAt);
+    const v = d.visitSheetData.createdAt;
+
+    return parsedFechas.some((pf) => pf.string === v);
+  });
+
+  if (!matched) {
+    return {
+      ok: false,
+      reason:
+        "Ninguna de las fechasPdf coincide con visitSheetData.createdAt de ningún detail",
+    };
+  }
+
+  // 3) Ordenar details por saleDate ascendente
+  const detallesOrdenados = [...details].sort(
+    (a, b) => new Date(a.saleDate) - new Date(b.saleDate)
+  );
+
+  // 4) Ordenar las fechasPdf asc por date
+  const fechasOrdenadas = parsedFechas.slice().sort((a, b) => a.date - b.date);
+
+  // 5) Emparejar uno a uno
+  const assignments = detallesOrdenados.map((detail, idx) => {
+    const { string: fechaStr } = fechasOrdenadas[idx];
+    const saleDt = new Date(detail.saleDate);
+    const year = saleDt.getFullYear();
+    return {
+      detail,
+      fecha: fechaStr,
+      nombre_pdf: `hoja-visita_${year}.pdf`,
+      coincide: detail.visitSheetData?.createdAt === fechaStr,
+    };
+  });
+
+  return {
+    ok: true,
+    detail: assignments,
+  };
+}
 function asignarFechasTresVentasDosPdf(fechasPdf, data) {
   const details = data.details;
   const docs = data.docs;
@@ -495,20 +546,18 @@ function asignarFechasTresVentasDosPdf2v(fechasPdf, details) {
 const casoDosVentasUnPdf_dup = async (
   resultado,
   connection,
-  nif,
+  data,
   fechas,
   tipoCaso
 ) => {
   // Implementación del caso para CP duplicado con 2 ventas y 1 PDF
   // Aquí iría la lógica específica para este caso
-   if (resultado.sales.length > 2) {
+  if (resultado.sales.length > 2) {
     // console.log("Esta CCPP tiene más de 2 ventas, no se puede corregir.");
     return { ok: false };
   }
   //Si no esta ordenado y si solo tiene 2 ventas
-  if (
-    resultado.details.length === 2
-  ) {
+  if (resultado.details.length === 2) {
     //Obtenemos el details_cae visitado erroneamente junto con su fecha de visista
     const detalleVisitado = resultado.details.find(
       (d) => d.visitada === 1 && d.visitSheet_id !== null
@@ -517,14 +566,33 @@ const casoDosVentasUnPdf_dup = async (
 
     //Tiene un pdf en azure,
     if (fechaVisita && fechas.length === 1 && fechas[0].fecha === fechaVisita) {
-      console.log("Esta CCPP solo tiene 1 pdf en azure");
-      // const correcionRegistros = await actualizarDosVentasUnPdf(
-      //   connection,
-      //   resultado
-      // );
+
       tipoCaso = "Caso 2 Ventas 1 Pdf en azure";
-      console.log(`Esta CCPP ${nif}: Es el caso tiene 2 Ventas y 1 Pdf`);
-      // return correcionRegistros && { ok: true, tipo: tipoCaso };
+      console.log(`Esta CCPP ${data.nif}: Es el caso tiene 2 Ventas y 1 Pdf`);
+
+      const fechasAsignadas = asignarFechasPorCoincidencia2(
+        [data.fechaActual, data.fechaNuevaAgregar],
+        resultado.details
+      );
+      
+      const correcionRegistros = await actualizarDosVentas_dup(
+        connection,
+        fechasAsignadas,
+        data.nif
+      );
+      for (const f of fechas) {
+        // console.log(fechasAsignadas);
+        
+        const pdfNuevoCreado = await actualizarFechaPdf(
+          data.nif,
+          f.pdf,
+          f.fecha,
+          data.fechaNuevaAgregar,
+          fechasAsignadas.detail[0].nombre_pdf,
+        );
+      }
+
+      return correcionRegistros && { ok: true, tipo: tipoCaso };
     }
   }
   return { ok: false };
