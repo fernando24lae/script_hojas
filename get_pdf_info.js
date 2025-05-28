@@ -112,7 +112,7 @@ async function findDateCoordinates(buffer, dateString) {
   throw new Error(`No encontré el texto "${dateString}" en la página 1.`);
 }
 
-async function actualizarFechaPdf(nif, originalName, oldDate, newDate, newName) {
+async function actualizarFechaPdf(aaff_size,nif, originalName, oldDate, newDate, newName) {
   // 1) Inicializar Azure BlobService
   const AZ = process.env.AZURE_STORAGE_CONNECTION_STRING;
   const blobService = BlobServiceClient.fromConnectionString(AZ);
@@ -144,8 +144,9 @@ async function actualizarFechaPdf(nif, originalName, oldDate, newDate, newName) 
   const pages = pdfDoc.getPages();
 
   // 5) Ajustes de posición y estilo
-  const x = 164;
-  const y = 650;
+  console.log("Tamaño del nombre del aaff:", aaff_size);
+  const x =  164; // Ajuste según el tamaño del nombre del aaff
+  const y = (aaff_size <= 26 ) ? 642 : 639; // Ajuste según el tamaño del nombre del aaff
   const width = 110;
   const height = 10;
   const fontSize = 8.2;

@@ -20,7 +20,7 @@ async function consultarPorNif(nif,db) {
 
     // 2. VALIDAR OBSERVACION DE NO VISITA
     const [aaffRows] = await connection.execute(
-      "SELECT id, observacionNoVisita, status FROM aaffs WHERE id = ?",
+      "SELECT id, observacionNoVisita,razonSocial, status FROM aaffs WHERE id = ?",
       [prop.aaff_id]
     );
 
@@ -132,6 +132,7 @@ async function consultarPorNif(nif,db) {
     // 8. RETORNAR OBJETO UNIFICADO
     const consultaUnificadaFinal = {
       properties: prop,
+      aaff: aaff,
       sales: sales,
       details: detailsConVisitas,
       docs: docs,

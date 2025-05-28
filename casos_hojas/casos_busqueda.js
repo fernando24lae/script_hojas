@@ -553,7 +553,11 @@ const casoDosVentasUnPdf_dup = async (
   // Implementación del caso para CP duplicado con 2 ventas y 1 PDF
   // Aquí iría la lógica específica para este caso
   if (resultado.sales.length > 2) {
-    // console.log("Esta CCPP tiene más de 2 ventas, no se puede corregir.");
+    console.log("Esta CCPP tiene más de 2 ventas, no se puede corregir.");
+    return { ok: false };
+  }
+  if (data.fechfechaNuevaAgregar == data.fechaActual) {
+        console.log("La colummna C Y D son iguales, no se puede corregir.");
     return { ok: false };
   }
   //Si no esta ordenado y si solo tiene 2 ventas
@@ -566,7 +570,6 @@ const casoDosVentasUnPdf_dup = async (
 
     //Tiene un pdf en azure,
     if (fechaVisita && fechas.length === 1 && fechas[0].fecha === fechaVisita) {
-
       tipoCaso = "Caso 2 Ventas 1 Pdf en azure";
       console.log(`Esta CCPP ${data.nif}: Es el caso tiene 2 Ventas y 1 Pdf`);
 
@@ -574,16 +577,17 @@ const casoDosVentasUnPdf_dup = async (
         [data.fechaActual, data.fechaNuevaAgregar],
         resultado.details
       );
-      
+
       const correcionRegistros = await actualizarDosVentas_dup(
         connection,
         fechasAsignadas,
         data.nif
       );
+
       for (const f of fechas) {
         // console.log(fechasAsignadas);
-        
         const pdfNuevoCreado = await actualizarFechaPdf(
+          resultado.aaff.razonSocial.length,
           data.nif,
           f.pdf,
           f.fecha,
