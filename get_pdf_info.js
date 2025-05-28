@@ -5,6 +5,7 @@ const { PDFDocument, StandardFonts, rgb } = require("pdf-lib");
 const fs = require("fs");
 const fontkit = require("@pdf-lib/fontkit");
 const { PdfReader } = require("pdfreader");
+const pdfjsLib = require("pdfjs-dist/legacy/build/pdf.js");
 
 const pdfFiles = [
   "hoja-visita.pdf",
@@ -97,14 +98,14 @@ async function findDateCoordinates(buffer, dateString) {
   // Carga con pdfjs
   const loadingTask = pdfjsLib.getDocument({ data: buffer });
   const pdf = await loadingTask.promise;
-  const page = await pdf.getPage(1);                // asumimos página 1
+  const page = await pdf.getPage(1); // asumimos página 1
   const viewport = page.getViewport({ scale: 1.0 }); // escala 1:1
 
   // Extrae todos los textos con sus transformaciones
   const textContent = await page.getTextContent();
   for (const item of textContent.items) {
     if (item.str.trim() === dateString) {
-      const [ , , , , x, yPDFjs ] = item.transform;
+      const [, , , , x, yPDFjs] = item.transform;
       // pdfjs y=distancia desde la esquina **inferior** de la página
       // viewport.height es la altura en unidades PDF
       return { x, yPDFjs, pageHeight: viewport.height };
@@ -113,7 +114,14 @@ async function findDateCoordinates(buffer, dateString) {
   throw new Error(`No encontré el texto "${dateString}" en la página 1.`);
 }
 
-async function actualizarFechaPdf(aaff_size,nif, originalName, oldDate, newDate, newName) {
+async function actualizarFechaPdf(
+  aaff_size,
+  nif,
+  originalName,
+  oldDate,
+  newDate,
+  newName
+) {
   // 1) Inicializar Azure BlobService
   const AZ = process.env.AZURE_STORAGE_CONNECTION_STRING;
   const blobService = BlobServiceClient.fromConnectionString(AZ);
@@ -130,8 +138,8 @@ async function actualizarFechaPdf(aaff_size,nif, originalName, oldDate, newDate,
   if (!pos) {
     throw new Error(`No se encontró "Fecha de visita:" en ${originalName}`);
   }
-  console.log("possss",pos);
-  throw new Error(`pararra`);
+  console.log("possss", pos);
+  // throw new Error(`pararra`);
   // 3) Verificar que la fecha vieja está en el PDF
   const found = await extractFecha(buffer);
   if (!found) {
@@ -153,31 +161,30 @@ async function actualizarFechaPdf(aaff_size,nif, originalName, oldDate, newDate,
 
   // 5) Ajustes de posición y estilo
   console.log("Tamaño del nombre del aaff:", aaff_size);
-  const x =  164; // Ajuste según el tamaño del nombre del aaff
+  const x = 164; // Ajuste según el tamaño del nombre del aaff
   // const y = (aaff_size <= 26 ) ? 642 : 639; // Ajuste según el tamaño del nombre del aaff
-  const y = pos.y;
+  const y = pos.yPDFjs - 2;
   const width = 110;
   const height = 10;
   const fontSize = 8.2;
 
   const firstPage = pages[0];
-    // Ocultar la fecha vieja
-    firstPage.drawRectangle({
-      x : x- 2,
-      y: y - 1,
-      width,
-      height : height + 2,
-      color: rgb(1,1,1),
-    });
-    // Escribir la fecha nueva
-    firstPage.drawText(newDate, {
-      x,
-      y:y + 2,
-      size: fontSize,
-      font: liberSans,
-      color: rgb(0, 0, 0),
-    });
-  
+  // Ocultar la fecha vieja
+  firstPage.drawRectangle({
+    x: x - 2,
+    y: y - 2,
+    width,
+    height: height + 2,
+    color: rgb(1, 1, 1),
+  });
+  // Escribir la fecha nueva
+  firstPage.drawText(newDate, {
+    x,
+    y: y + 2,
+    size: fontSize,
+    font: liberSans,
+    color: rgb(0, 0, 0),
+  });
 
   const modifiedPdf = await pdfDoc.save();
 
@@ -192,7 +199,67 @@ async function actualizarFechaPdf(aaff_size,nif, originalName, oldDate, newDate,
 
 // helper que lee un Buffer de PDF y devuelve {x,y} de "Fecha de visita:" en la página 1
 
-function getTextPositionFromBuffer(buffer) {
+/**
+ * Dado un Buffer de PDF, busca en la página 1 el patrón
+ *   Fecha de visita:DD-MM-YYYY
+ * y devuelve { x, y, date, text } correspondiente a la posición
+ * del primer guión (“-”) de la fecha, junto con la línea completa.
+ *
+ * @param {Buffer} buffer
+ * @returns {Promise<{x:number, y:number, date:string, text:string}|null>}
+ */
+async function getTextPositionFromBuffer(buffer) {
+  // 1) Carga el documento
+  const loadingTask = pdfjsLib.getDocument({ data: buffer });
+  const pdf = await loadingTask.promise;
+
+  // 2) Página 1
+  const page = await pdf.getPage(1);
+  const viewport = page.getViewport({ scale: 1.0 });
+  const pageHeight = viewport.height;
+
+  // 3) Extrae cada trozo de texto con su transform
+  const { items } = await page.getTextContent();
+
+  // 4) Regex para la fecha DD-MM-YYYY
+  const dateRe = /\b(\d{2}-\d{2}-\d{4})\b/;
+
+  for (const item of items) {
+    const m = dateRe.exec(item.str);
+    if (m) {
+      const dateStr = m[1];
+      const [, , , , x, yPDFjs] = item.transform;
+      return {
+        x,
+        yPDFjs,
+        // si necesitas coordenada desde arriba:
+        yFromTop: pageHeight - yPDFjs,
+        date: dateStr,
+        text: item.str
+      };
+    }
+  }
+
+  return null;
+}
+
+
+// Ejemplo de llamada
+// (async () => {
+//   try {
+//     await actualizarFechaPdf(
+//       "H54083365",
+//       "hoja-visita_2024.pdf",
+//       "26-11-2024",
+//       "30-05-2025",
+//       "hoja-visita_2023.pdf"
+//     );
+//   } catch (err) {
+//     console.error("Error:", err.message);
+//   }
+// })();
+
+function getTextPositionFromBufferMasomenos(buffer) {
   return new Promise((resolve, reject) => {
     let currentPage = 0;
     const page1Items = [];
@@ -212,16 +279,17 @@ function getTextPositionFromBuffer(buffer) {
         const regex = /Fecha de visita:\s*(\d{2}-\d{2}-\d{4})/i;
         for (const yKey of Object.keys(lines).sort((a, b) => a - b)) {
           const items = lines[yKey].sort((a, b) => a.x - b.x);
-          
+
           // Reconstruir la línea conservando espacios aproximados
-          let row = '';
+          let row = "";
           let prevX = 0;
           for (const it of items) {
-            if (row.length > 0 && it.x > prevX + 5) { // Añadir espacio si hay suficiente separación
-              row += ' ';
+            if (row.length > 0 && it.x > prevX + 5) {
+              // Añadir espacio si hay suficiente separación
+              row += " ";
             }
             row += it.text;
-            prevX = it.x + (it.text.length * 5); // Estimación aproximada del ancho del texto
+            prevX = it.x + it.text.length * 5; // Estimación aproximada del ancho del texto
           }
 
           const m = row.match(regex);
@@ -230,7 +298,7 @@ function getTextPositionFromBuffer(buffer) {
             const fullMatch = m[0]; // "Fecha de visita: DD-MM-YYYY"
             const matchStart = m.index;
             const dateStart = matchStart + fullMatch.indexOf(dateStr);
-            
+
             // Encontrar el fragmento exacto que contiene la fecha
             let currentPos = 0;
             for (const it of items) {
@@ -239,10 +307,10 @@ function getTextPositionFromBuffer(buffer) {
                 // Calcular la posición exacta dentro del fragmento
                 const offsetInFragment = dateStart - currentPos;
                 return resolve({
-                  x: it.x + (offsetInFragment * 5), // Aproximación del ancho de caracter
+                  x: it.x + offsetInFragment * 5, // Aproximación del ancho de caracter
                   y: it.y,
                   date: dateStr,
-                  text: fullMatch // Solo devolvemos el texto que nos interesa
+                  text: fullMatch, // Solo devolvemos el texto que nos interesa
                 });
               }
               currentPos += textLength + (currentPos > 0 ? 1 : 0); // +1 por los espacios añadidos
@@ -264,21 +332,7 @@ function getTextPositionFromBuffer(buffer) {
   });
 }
 
-// Ejemplo de llamada
-// (async () => {
-//   try {
-//     await actualizarFechaPdf(
-//       "H54083365",
-//       "hoja-visita_2024.pdf",
-//       "26-11-2024",
-//       "30-05-2025",
-//       "hoja-visita_2023.pdf"
-//     );
-//   } catch (err) {
-//     console.error("Error:", err.message);
-//   }
-// })();
 module.exports = {
   getFechasPdf,
-  actualizarFechaPdf
+  actualizarFechaPdf,
 };
