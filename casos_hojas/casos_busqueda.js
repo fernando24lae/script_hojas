@@ -5,6 +5,10 @@ const {
   actualizarDosVentas_dup,
 } = require("./casos_actualizar");
 
+
+
+
+
 const casoDosVentasUnPdf = async (
   resultado,
   connection,
@@ -573,16 +577,16 @@ const casoDosVentasUnPdf_dup = async (
       tipoCaso = "Caso 2 Ventas 1 Pdf en azure";
       console.log(`Esta CCPP ${data.nif}: Es el caso tiene 2 Ventas y 1 Pdf`);
 
-      const fechasAsignadas = asignarFechasPorCoincidencia2(
-        [data.fechaActual, data.fechaNuevaAgregar],
-        resultado.details
-      );
+      // const fechasAsignadas = asignarFechasPorCoincidencia2(
+      //   [data.fechaActual, data.fechaNuevaAgregar],
+      //   resultado.details
+      // );
 
-      const correcionRegistros = await actualizarDosVentas_dup(
-        connection,
-        fechasAsignadas,
-        data.nif
-      );
+      // const correcionRegistros = await actualizarDosVentas_dup(
+      //   connection,
+      //   fechasAsignadas,
+      //   data.nif
+      // );
 
       for (const f of fechas) {
         // console.log(fechasAsignadas);
@@ -592,7 +596,8 @@ const casoDosVentasUnPdf_dup = async (
           f.pdf,
           f.fecha,
           data.fechaNuevaAgregar,
-          fechasAsignadas.detail[0].nombre_pdf,
+          "hoja-visita_2023.pdf"
+          // fechasAsignadas.detail[0].nombre_pdf,
         );
       }
 

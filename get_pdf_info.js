@@ -4,6 +4,7 @@ const pdfParse = require("pdf-parse");
 const { PDFDocument, StandardFonts, rgb } = require("pdf-lib");
 const fs = require("fs");
 const fontkit = require("@pdf-lib/fontkit");
+const { PdfReader } = require("pdfreader");
 
 const pdfFiles = [
   "hoja-visita.pdf",
@@ -124,6 +125,13 @@ async function actualizarFechaPdf(aaff_size,nif, originalName, oldDate, newDate,
   const downloadRes = await blobClient.download();
   const buffer = await streamToBuffer(downloadRes.readableStreamBody);
 
+  // 2.1) Encontrar posición de "Fecha de visita:" en ese buffer
+  const pos = await getTextPositionFromBuffer(buffer, "Fecha de visita:");
+  if (!pos) {
+    throw new Error(`No se encontró "Fecha de visita:" en ${originalName}`);
+  }
+  console.log("possss",pos);
+  throw new Error(`pararra`);
   // 3) Verificar que la fecha vieja está en el PDF
   const found = await extractFecha(buffer);
   if (!found) {
@@ -146,7 +154,8 @@ async function actualizarFechaPdf(aaff_size,nif, originalName, oldDate, newDate,
   // 5) Ajustes de posición y estilo
   console.log("Tamaño del nombre del aaff:", aaff_size);
   const x =  164; // Ajuste según el tamaño del nombre del aaff
-  const y = (aaff_size <= 26 ) ? 642 : 639; // Ajuste según el tamaño del nombre del aaff
+  // const y = (aaff_size <= 26 ) ? 642 : 639; // Ajuste según el tamaño del nombre del aaff
+  const y = pos.y;
   const width = 110;
   const height = 10;
   const fontSize = 8.2;
@@ -179,6 +188,80 @@ async function actualizarFechaPdf(aaff_size,nif, originalName, oldDate, newDate,
   });
 
   console.log(`✔ "${originalName}" → "${newName}" subido correctamente.`);
+}
+
+// helper que lee un Buffer de PDF y devuelve {x,y} de "Fecha de visita:" en la página 1
+
+function getTextPositionFromBuffer(buffer) {
+  return new Promise((resolve, reject) => {
+    let currentPage = 0;
+    const page1Items = [];
+
+    new PdfReader().parseBuffer(buffer, (err, item) => {
+      if (err) return reject(err);
+
+      if (!item) {
+        // Agrupar por línea usando Y redondeado
+        const lines = {};
+        for (const it of page1Items) {
+          const yKey = Math.round(it.y);
+          (lines[yKey] ||= []).push(it);
+        }
+
+        // Buscar en cada línea el patrón de fecha
+        const regex = /Fecha de visita:\s*(\d{2}-\d{2}-\d{4})/i;
+        for (const yKey of Object.keys(lines).sort((a, b) => a - b)) {
+          const items = lines[yKey].sort((a, b) => a.x - b.x);
+          
+          // Reconstruir la línea conservando espacios aproximados
+          let row = '';
+          let prevX = 0;
+          for (const it of items) {
+            if (row.length > 0 && it.x > prevX + 5) { // Añadir espacio si hay suficiente separación
+              row += ' ';
+            }
+            row += it.text;
+            prevX = it.x + (it.text.length * 5); // Estimación aproximada del ancho del texto
+          }
+
+          const m = row.match(regex);
+          if (m) {
+            const dateStr = m[1];
+            const fullMatch = m[0]; // "Fecha de visita: DD-MM-YYYY"
+            const matchStart = m.index;
+            const dateStart = matchStart + fullMatch.indexOf(dateStr);
+            
+            // Encontrar el fragmento exacto que contiene la fecha
+            let currentPos = 0;
+            for (const it of items) {
+              const textLength = it.text.length;
+              if (currentPos + textLength > dateStart) {
+                // Calcular la posición exacta dentro del fragmento
+                const offsetInFragment = dateStart - currentPos;
+                return resolve({
+                  x: it.x + (offsetInFragment * 5), // Aproximación del ancho de caracter
+                  y: it.y,
+                  date: dateStr,
+                  text: fullMatch // Solo devolvemos el texto que nos interesa
+                });
+              }
+              currentPos += textLength + (currentPos > 0 ? 1 : 0); // +1 por los espacios añadidos
+            }
+          }
+        }
+        return resolve(null);
+      }
+
+      if (item.page) {
+        currentPage = item.page;
+        return;
+      }
+
+      if (currentPage === 1 && item.text) {
+        page1Items.push(item);
+      }
+    });
+  });
 }
 
 // Ejemplo de llamada
